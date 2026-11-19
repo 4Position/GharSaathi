@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  LANDLORD
+  TENANT
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  UNAVAILABLE
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaseStatus {
+  ACTIVE
+  ENDED
+  TERMINATED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  properties   Property[]    @relation("LandlordProperties")
+  applications Application[] @relation("TenantApplications")
+}
+
+model Property {
+  id           Int             @id @default(autoincrement())
+  landlordId   Int
+  title        String
+  description  String?
+  address      String
+  city         String
+  rent         Decimal         @db.Decimal(10, 2)
+  bedrooms     Int
+  bathrooms    Int
+  status       PropertyStatus  @default(AVAILABLE)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  landlord     User            @relation("LandlordProperties", fields: [landlordId], references: [id], onDelete: Restrict)
+  applications Application[]
+  images       PropertyImage[]
+
+  @@index([landlordId])
+  @@index([city, status])
+}
+
+model PropertyImage {
+  id         Int      @id @default(autoincrement())
+  propertyId Int
+  imageUrl   String
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model Application {
+  id         Int               @id @default(autoincrement())
+  propertyId Int
+  tenantId   Int
+  status     ApplicationStatus @default(PENDING)
+  message    String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  property   Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenant     User              @relation("TenantApplications", fields: [tenantId], references: [id], onDelete: Restrict)
+  lease      Lease?
+
+  @@unique([propertyId, tenantId])
+  @@index([tenantId])
+}
+
+model Lease {
+  id                  Int                  @id @default(autoincrement())
+  applicationId       Int                  @unique
+  monthlyRent         Decimal              @db.Decimal(10, 2)
+  startDate           DateTime             @db.Date
+  endDate             DateTime             @db.Date
+  status              LeaseStatus          @default(ACTIVE)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  application         Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  payments            Payment[]
+  maintenanceRequests MaintenanceRequest[]
+}
+
+model Payment {
+  id        Int           @id @default(autoincrement())
+  leaseId   Int
+  amount    Decimal       @db.Decimal(10, 2)
+  dueDate   DateTime      @db.Date
+  paidDate  DateTime?     @db.Date
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  lease     Lease         @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId])
+}
+
+model MaintenanceRequest {
+  id          Int               @id @default(autoincrement())
+  leaseId     Int
+  title       String
+  description String
+  status      MaintenanceStatus @default(OPEN)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  lease       Lease             @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId])
+}
